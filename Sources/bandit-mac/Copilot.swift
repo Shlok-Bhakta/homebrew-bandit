@@ -1,32 +1,47 @@
 import Foundation
 
 /// The GitHub Copilot app (and Copilot CLI) run hooks on an agent's events. A small plugin (and
-/// personal hooks, for the CLI) run `np-appwatch hook <event>`, which picks the buzz.
+/// personal hooks, for the CLI) run `bandit-mac hook <event>`, which picks the buzz.
 enum Copilot {
     static let app = "com.github.githubapp"
-    static let pluginName = "np-band"
+    static let pluginName = "bandit"
 
     static var supportDirectory: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return support.appendingPathComponent("np-appwatch")
+        return support.appendingPathComponent("bandit-mac")
     }
 
     static var pluginDirectory: URL { supportDirectory.appendingPathComponent("copilot-plugin") }
 
-    static var personalHooks: URL {
-        let home = ProcessInfo.processInfo.environment["COPILOT_HOME"].map { URL(fileURLWithPath: $0) }
+    static var copilotHome: URL {
+        ProcessInfo.processInfo.environment["COPILOT_HOME"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".copilot")
-        return home.appendingPathComponent("hooks/np-band.json")
     }
 
+    static var personalHooks: URL { copilotHome.appendingPathComponent("hooks/bandit.json") }
+
     static var logFile: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/np-appwatch/copilot-hooks.log")
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/bandit-mac/copilot-hooks.log")
+    }
+
+    /// What this helper installed when it was np-appwatch: its plugin and hooks run a binary
+    /// that's gone, so `install` and `uninstall` take them out too.
+    enum Old {
+        static let pluginName = "np-band"
+
+        static var supportDirectory: URL {
+            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            return support.appendingPathComponent("np-appwatch")
+        }
+
+        static var pluginDirectory: URL { supportDirectory.appendingPathComponent("copilot-plugin") }
+        static var personalHooks: URL { copilotHome.appendingPathComponent("hooks/np-band.json") }
     }
 
     /// The stable path Homebrew links (survives upgrades), else this binary's own.
     static var command: String {
-        for prefix in ["/opt/homebrew", "/usr/local"] where FileManager.default.isExecutableFile(atPath: "\(prefix)/bin/np-appwatch") {
-            return "\(prefix)/bin/np-appwatch"
+        for prefix in ["/opt/homebrew", "/usr/local"] where FileManager.default.isExecutableFile(atPath: "\(prefix)/bin/bandit-mac") {
+            return "\(prefix)/bin/bandit-mac"
         }
         return URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().path
     }
@@ -56,8 +71,8 @@ enum Copilot {
 
     static let pluginJSON = """
     {
-      "name": "np-band",
-      "description": "Buzzes the Meta Neural Band (through the NP Band Remote dongle and np-appwatch) when an agent finishes, asks you something, or fails.",
+      "name": "bandit",
+      "description": "Buzzes the Meta Neural Band (through the Bandit dongle and bandit-mac) when an agent finishes, asks you something, or fails.",
       "version": "\(version)",
       "hooks": "hooks.json"
     }
@@ -74,19 +89,20 @@ enum Copilot {
             try FileManager.default.createDirectory(at: personalHooks.deletingLastPathComponent(), withIntermediateDirectories: true)
             try hooksJSON.write(to: personalHooks, atomically: true, encoding: .utf8)
         } catch {
-            FileHandle.standardError.write(Data("np-appwatch: couldn't write the Copilot hooks: \(error.localizedDescription)\n".utf8))
+            FileHandle.standardError.write(Data("bandit-mac: couldn't write the Copilot hooks: \(error.localizedDescription)\n".utf8))
             exit(1)
         }
+        removeOld(findCopilot())
         print("Personal hooks (Copilot CLI): \(personalHooks.path)")
         print("Plugin: \(pluginDirectory.path)")
         if let copilot = findCopilot() {
             _ = run(copilot, ["plugin", "uninstall", pluginName])  // an older copy, if any
             let status = run(copilot, ["plugin", "install", pluginDirectory.path])
-            print(status == 0 ? "Installed the np-band plugin with \(copilot)." : "`copilot plugin install` failed (exit \(status)); see above.")
+            print(status == 0 ? "Installed the bandit plugin with \(copilot)." : "`copilot plugin install` failed (exit \(status)); see above.")
         } else {
             print("""
             No `copilot` command found, so the plugin isn't installed yet. Either install Copilot CLI
-            (brew install copilot-cli) and run `np-appwatch copilot install` again, or add the plugin
+            (brew install copilot-cli) and run `bandit-mac copilot install` again, or add the plugin
             folder above in the Copilot app's plugin settings.
             """)
         }
@@ -95,7 +111,7 @@ enum Copilot {
         Then restart the Copilot app. Each hook it runs is logged to:
           \(logFile.path)
         (tail -f that file while Copilot works to see what fires). Test the buzzes with
-          np-appwatch notify done   ·   np-appwatch notify question   ·   np-appwatch notify error
+          bandit-mac notify done   ·   bandit-mac notify question   ·   bandit-mac notify error
         """)
         exit(0)
     }
@@ -104,27 +120,34 @@ enum Copilot {
         if let copilot = findCopilot() { _ = run(copilot, ["plugin", "uninstall", pluginName]) }
         try? FileManager.default.removeItem(at: personalHooks)
         try? FileManager.default.removeItem(at: pluginDirectory)
-        print("Removed the np-band hooks.")
+        removeOld(findCopilot())
+        print("Removed the bandit hooks.")
         exit(0)
     }
 
-    /// `np-appwatch copilot check`: what's installed, and what Copilot has run lately.
+    /// `bandit-mac copilot check`: what's installed, and what Copilot has run lately.
     static func check() -> Never {
         func mark(_ ok: Bool) -> String { ok ? "yes" : "NO" }
         let files = FileManager.default
-        print("np-appwatch \(version)")
+        print("bandit-mac \(version)")
         print("Watcher running (holds the dongle link): \(mark(WatcherFile.running))")
         print("Personal hooks (\(personalHooks.path)): \(mark(files.fileExists(atPath: personalHooks.path)))")
         print("Plugin folder (\(pluginDirectory.path)): \(mark(files.fileExists(atPath: pluginDirectory.path)))")
+        var leftovers = [Old.personalHooks, Old.pluginDirectory].map(\.path).filter { files.fileExists(atPath: $0) }
         if let copilot = findCopilot() {
+            let plugins = output(copilot, ["plugin", "list"])
             print("Copilot CLI: \(copilot); its plugins:")
-            _ = run(copilot, ["plugin", "list"])
+            print(plugins, terminator: "")
+            if plugins.contains(Old.pluginName) { leftovers.append("the \(Old.pluginName) plugin") }
         } else {
             print("Copilot CLI: not found (the plugin is only installed if you added the folder in the app)")
         }
+        if !leftovers.isEmpty {
+            print("Left over from np-appwatch (`bandit-mac copilot install` removes them): \(leftovers.joined(separator: ", "))")
+        }
         let lines = ((try? String(contentsOf: logFile, encoding: .utf8)) ?? "").split(separator: "\n").suffix(15)
         if lines.isEmpty {
-            print("\nNo hook has run yet: Copilot isn't running np-appwatch's hooks.")
+            print("\nNo hook has run yet: Copilot isn't running bandit-mac's hooks.")
         } else {
             print("\nThe last hooks Copilot ran (\(logFile.path)):")
             for line in lines { print("  " + String(line.prefix(300))) }
@@ -139,18 +162,55 @@ enum Copilot {
         return candidates.map { "\($0)/copilot" }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    private static func run(_ tool: String, _ arguments: [String]) -> Int32 {
+    private static func run(_ tool: String, _ arguments: [String], quiet: Bool = false) -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = arguments
+        if quiet {
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+        }
         do { try process.run() } catch { return -1 }
         process.waitUntilExit()
         return process.terminationStatus
     }
 
+    /// What a tool prints (its stdout).
+    private static func output(_ tool: String, _ arguments: [String]) -> String {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
+        process.standardOutput = pipe
+        do { try process.run() } catch { return "" }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// Takes out what np-appwatch installed (its plugin, its personal hooks, its plugin folder)
+    /// and says what it found.
+    private static func removeOld(_ copilot: String?) {
+        let files = FileManager.default
+        var removed: [String] = []
+        if let copilot {
+            let listed = output(copilot, ["plugin", "list"]).contains(Old.pluginName)
+            if run(copilot, ["plugin", "uninstall", Old.pluginName], quiet: true) == 0, listed { removed.append("the \(Old.pluginName) plugin") }
+        }
+        for url in [Old.personalHooks, Old.pluginDirectory] where files.fileExists(atPath: url.path) {
+            if (try? files.removeItem(at: url)) != nil { removed.append(url.path) }
+        }
+        if (try? files.contentsOfDirectory(atPath: Old.supportDirectory.path))?.isEmpty == true {
+            try? files.removeItem(at: Old.supportDirectory)
+        }
+        guard !removed.isEmpty else { return }
+        print("Removed np-appwatch's Copilot hooks: \(removed.joined(separator: ", ")).")
+        print("(If you added its plugin folder in the Copilot app's settings, add the new one there instead.)")
+    }
+
     // MARK: a hook firing
 
-    /// `np-appwatch hook <event>`, with the event's JSON on stdin: logs it, picks a buzz, hands it
+    /// `bandit-mac hook <event>`, with the event's JSON on stdin: logs it, picks a buzz, hands it
     /// to `notify`. Never blocks Copilot: no output, exit 0.
     static func hook(_ event: String) -> Never {
         let input = isatty(FileHandle.standardInput.fileDescriptor) == 0 ? FileHandle.standardInput.readDataToEndOfFile() : Data()

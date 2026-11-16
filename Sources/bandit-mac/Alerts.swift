@@ -1,13 +1,13 @@
 import AppKit
 import CoreGraphics
 
-/// Buzzes on the band for an agent (Copilot) that finished, asks something, or failed: `np-appwatch
+/// Buzzes on the band for an agent (Copilot) that finished, asks something, or failed: `bandit-mac
 /// notify <kind>` hands it to the running watcher (it holds the dongle's link), which sends
 /// `buzz <kind>` unless you're already looking at that app.
 enum Alert: String, CaseIterable {
     case done, question, error
 
-    static let notification = Notification.Name("io.github.shlok-bhakta.np-appwatch.alert")
+    static let notification = Notification.Name("io.github.shlok-bhakta.bandit-mac.alert")
 }
 
 enum AlertGate {
@@ -39,7 +39,7 @@ enum AlertGate {
 enum WatcherFile {
     static var url: URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        return caches.appendingPathComponent("io.github.shlok-bhakta.np-appwatch/watcher.pid")
+        return caches.appendingPathComponent("io.github.shlok-bhakta.bandit-mac/watcher.pid")
     }
 
     static func claim() {
@@ -53,7 +53,7 @@ enum WatcherFile {
     }
 }
 
-/// `np-appwatch notify <kind> [--app <bundle id>]`: through the watcher, or straight to the dongle
+/// `bandit-mac notify <kind> [--app <bundle id>]`: through the watcher, or straight to the dongle
 /// when it isn't running.
 func notify(_ alert: Alert, app: String?, event: String? = nil) -> Never {
     if WatcherFile.running {
@@ -65,7 +65,7 @@ func notify(_ alert: Alert, app: String?, event: String? = nil) -> Never {
     }
     once { link in
         link.send("buzz \(alert.rawValue)") { error in
-            if let error { FileHandle.standardError.write(Data("np-appwatch: \(error.localizedDescription)\n".utf8)); exit(1) }
+            if let error { FileHandle.standardError.write(Data("bandit-mac: \(error.localizedDescription)\n".utf8)); exit(1) }
             exit(0)
         }
     }

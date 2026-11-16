@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.shlok-bhakta.np-appwatch</string>
+	<string>io.github.shlok-bhakta.bandit-mac</string>
 	<key>CFBundleName</key>
-	<string>NP App Watch</string>
+	<string>Bandit</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.3</string>
+	<string>0.3.0</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>NP App Watch tells your Neural Band dongle which app is in front, so its gestures follow the app.</string>
+	<string>Bandit tells your Bandit dongle which app is in front, so the Neural Band's gestures follow the app.</string>
 </dict>
 </plist>

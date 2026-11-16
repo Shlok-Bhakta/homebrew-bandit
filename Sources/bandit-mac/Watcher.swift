@@ -32,7 +32,7 @@ final class Watcher {
         WatcherFile.claim()
     }
 
-    /// An agent's news on the band (`np-appwatch notify`), unless you're already looking at it.
+    /// An agent's news on the band (`bandit-mac notify`), unless you're already looking at it.
     func buzz(_ alert: Alert, app: String?, event: String?) {
         let (go, why) = AlertGate.shouldBuzz(alert, app: app, event: event)
         guard go else { return log("Not buzzing \(alert.rawValue): \(why)") }

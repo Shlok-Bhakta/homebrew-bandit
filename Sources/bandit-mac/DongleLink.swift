@@ -38,6 +38,8 @@ final class DongleLink: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
     private var writes: [(Error?) -> Void] = []
     private var statusReads: [(String?) -> Void] = []
     private var lookAgain: Timer?
+    private var bluetoothCheck: Timer?
+    private var startedOver = false
 
     override init() {
         super.init()
@@ -47,7 +49,7 @@ final class DongleLink: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
     /// Writes a command; `done` runs when the dongle acknowledged it.
     func send(_ text: String, done: @escaping (Error?) -> Void) {
         guard state == .ready, let peripheral, let commandCharacteristic else {
-            return done(NSError(domain: "np-appwatch", code: 1, userInfo: [NSLocalizedDescriptionKey: "not connected"]))
+            return done(NSError(domain: "bandit-mac", code: 1, userInfo: [NSLocalizedDescriptionKey: "not connected"]))
         }
         writes.append(done)
         peripheral.writeValue(Data(text.utf8), for: commandCharacteristic, type: .withResponse)
@@ -86,7 +88,7 @@ final class DongleLink: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
         peripheral = nil
         commandCharacteristic = nil
         statusCharacteristic = nil
-        let failed = NSError(domain: "np-appwatch", code: 2, userInfo: [NSLocalizedDescriptionKey: "the dongle went away"])
+        let failed = NSError(domain: "bandit-mac", code: 2, userInfo: [NSLocalizedDescriptionKey: "the dongle went away"])
         writes.forEach { $0(failed) }
         writes.removeAll()
         statusReads.forEach { $0(nil) }
@@ -96,12 +98,32 @@ final class DongleLink: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
         lookAgain = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in self?.find() }
     }
 
+    /// macOS sometimes leaves a background agent's manager saying Bluetooth is off after it was
+    /// turned off and on, with no update after: look again every 10 s, and if it still says off
+    /// after a minute, start over with a new manager (once).
+    private func watchBluetooth() {
+        guard bluetoothCheck?.isValid != true else { return }
+        let since = Date()
+        bluetoothCheck = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] timer in
+            guard let self, state == .unavailable("Bluetooth is off") else { return timer.invalidate() }
+            if central.state == .poweredOn { return find() }
+            guard central.state == .poweredOff, !startedOver, Date().timeIntervalSince(since) >= 60 else { return }
+            startedOver = true
+            log("Bluetooth still says off after a minute: starting CoreBluetooth over")
+            central.delegate = nil
+            central = CBCentralManager(delegate: self, queue: nil)
+        }
+    }
+
     // MARK: CBCentralManagerDelegate
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn: find()
-        case .poweredOff: state = .unavailable("Bluetooth is off")
+        case .poweredOff:
+            reset(retryAfter: 10)  // its peripherals went with it
+            state = .unavailable("Bluetooth is off")
+            watchBluetooth()
         case .unauthorized: state = .unavailable("No Bluetooth permission (System Settings › Privacy & Security › Bluetooth)")
         case .unsupported: state = .unavailable("This Mac has no Bluetooth LE")
         default: break

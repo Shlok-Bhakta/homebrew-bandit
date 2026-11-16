@@ -18,8 +18,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     func refresh() {
         let symbol = watcher.link.state != .ready ? "hand.raised.slash" : watcher.paused ? "pause.circle" : "hand.raised"
-        item.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "NP App Watch")
-        item.button?.toolTip = "NP App Watch: \(watcher.link.state.title)"
+        item.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Bandit")
+        item.button?.toolTip = "Bandit: \(watcher.link.state.title)"
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -35,7 +35,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         let pause = action(watcher.paused ? "Resume switching" : "Pause switching", #selector(togglePause))
         menu.addItem(pause)
         menu.addItem(.separator())
-        menu.addItem(action("Quit NP App Watch", #selector(quit)))
+        menu.addItem(action("Quit Bandit", #selector(quit)))
     }
 
     private func label(_ title: String) -> NSMenuItem {
