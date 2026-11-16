@@ -2,7 +2,7 @@ class BanditMac < Formula
   desc "Switches the Bandit dongle's gesture profile with the app in front"
   homepage "https://github.com/Shlok-Bhakta/homebrew-bandit"
   url "https://github.com/Shlok-Bhakta/homebrew-bandit/archive/refs/tags/v0.3.0.tar.gz"
-  sha256 "TODO"
+  sha256 "2c44d1eecd7fb9746af45a39df81ee0e678c5bbb39a0464b4e66b083b7701b4c"
   license "MIT"
   head "https://github.com/Shlok-Bhakta/homebrew-bandit.git", branch: "main"
 
