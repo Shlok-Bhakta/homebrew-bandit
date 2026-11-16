@@ -1,7 +1,7 @@
 import CoreBluetooth
 import Foundation
 
-/// The dongle's control service (firmware/band-dongle/CONTROL.md in the main project), over the
+/// The dongle's control service (firmware/bandit/CONTROL.md in github.com/Shlok-Bhakta/bandit), over the
 /// link macOS already holds for the dongle as a keyboard and mouse.
 final class DongleLink: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     static let service = CBUUID(string: "4E500100-3C1A-4E0B-9D1E-6F2B5A7C8D90")
